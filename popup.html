@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Tab to Txt</title>
+<style type="text/css">
+form {
+  display: none;
+}
+</style>
+</head>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.2/jquery.min.js"></script>
+<script type="text/javascript">
+$(document).ready(function() {
+  if (!chrome) {
+    return;
+  }
+  var $target = $("#urloutput");
+  var tabcount = 0;
+  chrome.tabs.getAllInWindow(null, function(tabs) {
+    // text will contain the plain text dump of our current
+    // window's tab list.
+    var text = "";
+
+    // For each tab in the current window...
+    $(tabs).each(function(i, tab) {
+      // ... if the tab is not open to an internal chrome URL ...
+      if (!tab.url.match(/^chrome:\/\//)) {
+        // ... and the url is nonempty... 
+        if (tab.url != "") {
+          // ... then add the title and url to the text block.
+          // If the title is empty, just add the url.
+          if (tab.title != "") {
+            text += tab.title + "\n";
+          }
+          // Add an extra newline after the url, so that items
+          // in the text block are separated by a blank line.
+          text += tab.url + "\n\n";
+        }
+        // Count the number of tabs we've added to the text
+        // block.
+        tabcount += 1;
+      }
+    });
+
+    // Create a <pre> block and set it's text content to that
+    // of the text block we've just built. Using <pre> should 
+    // format it nicely without textwrap, using in a monospace 
+    // font.
+    var $pre = $("<pre/>").text(text);
+
+    // Insert the pre element into the document, as the last
+    // child of our target element.
+    $target.append($pre);
+
+    // It may be that this is a new window, without any tabs.
+    // Rather than showing an empty screen, we'll want to
+    // instead show a textarea where a list of URLs can be
+    // used to instantiate new tabs.
+    
+    // If there were no tabs added to the text block (i.e. the 
+    // text block is empty)...
+    if (tabcount == 0) {
+      // ... then show our form (which was hidden by defualt),
+      // and attach a submit event handler.
+      $("form").show().submit(function() {
+        // Submit Event Handler
+
+        // value is the content of our form input field. 
+        // We expect this to contain a newline separated 
+        // list of URLs, with optional newline spacing
+        // and title information. Essentially, we expect
+        // either an exact copy of this plugin's previous
+        // output, or a stripped down version of it. Even
+        // just a list of URLs, separated by newlines.
+        var value = $("#urlinput").val();
+
+        // Split the input text into newlines by...
+        var lines = value
+
+          // ... squashing more than one consecutive newline/whitespace
+          // into a single newline...
+          .replace(/\n[\n\s]+/g, "\n")
+
+          // ... stripping out any leading or trailing newlines...
+          .replace(/^\n|\n$/g, "")
+          
+          // ... and finally splitting on each newline character.
+          .split(/\n/);
+
+        // At this point, lines contains an array of lines from the
+        // input. Some may be urls (i.e. http://example.com), while 
+        // others may be title text or just garbage. We want to
+        // focus on any line that looks enough like a URL, and urlRegex
+        // should get us close enough to that. It matches any string
+        // that begins with a protocol identifier followed by ://, for
+        // example bogus-PROTOCOL123:// but not BOGUS PROTOCOL:// or
+        // www.example.com.
+        var urlRegex = /^[a-zA-Z0-9-]+:\/\//;
+
+        // For each input line...
+        $(lines).each(function(i, line) {
+          // ... if the line looks like a URL...
+          if (line.match(urlRegex)) {
+            // ... then open it in a new tab.
+            console.log("Opening URL in new tab: " + line);
+            chrome.tabs.create({
+              url: line, 
+              selected: false
+            });
+          }
+        });
+
+        // Now, close the current tab, but double check to
+        // make sure it's a chrome:// tab (i.e. New Tab) 
+        // before we do.
+        chrome.tabs.getSelected(undefined, function(tab) {
+          if (tab.url.match(/^chrome:\/\//)) {
+            chrome.tabs.remove(tab.id);
+          }
+        });
+
+        // Return false to prevent the default form submit
+        // event handler from running.
+        return false;
+      });
+    }
+  });
+});
+</script>
+<body>
+  <div id="urloutput"/>
+  <form>
+    <textarea id="urlinput"></textarea>
+    <input type="submit" name="submit" id="submit" value="Load as Tabs"/>
+  </form>
+</body>
+</html>
